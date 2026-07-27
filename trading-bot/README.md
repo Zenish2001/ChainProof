@@ -1,57 +1,101 @@
-# Cryptocurrency Trading Bot — Full Stack Platform
+<div align="center">
+
+<img src="https://capsule-render.vercel.app/api?type=rect&color=0:232526,100:414345&height=120&section=header&text=Trading%20Bot&fontSize=42&fontColor=ffffff&fontAlignY=55" width="100%"/>
 
 [![Python](https://img.shields.io/badge/Python-3.10+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/downloads/)
 [![Flask](https://img.shields.io/badge/Flask-3.0-000000?style=for-the-badge&logo=flask&logoColor=white)](https://flask.palletsprojects.com/)
-[![License](https://img.shields.io/badge/License-MIT-yellow?style=for-the-badge)](LICENSE)
+[![License](https://img.shields.io/badge/License-MIT-yellow?style=for-the-badge)](../LICENSE)
 [![Status](https://img.shields.io/badge/Status-Production%20Ready-2ea44f?style=for-the-badge)]()
 
-An automated cryptocurrency trading platform that uses technical analysis and risk management to generate and execute trades. Includes a real-time web dashboard, a paper trading mode, and a full backtesting engine.
+</div>
 
----
+An automated cryptocurrency trading platform that uses technical analysis and risk management to generate and execute trades. Includes a real-time web dashboard, a paper trading mode, and a full backtesting engine. This module is the foundation that [ChainProof's verification layer](../verification-layer/) builds on.
+
+<img src="https://capsule-render.vercel.app/api?type=rect&color=0:232526,100:414345&height=3&width=100%"/>
+
+## Contents
+
+- [Performance Highlights](#performance-highlights)
+- [Features](#features)
+- [Architecture](#architecture)
+- [Quick Start](#quick-start)
+- [Technical Indicators](#technical-indicators)
+- [Trading Strategy](#trading-strategy)
+- [Backtesting Results](#backtesting-results)
+- [Database Schema](#database-schema)
+- [API Endpoints](#api-endpoints)
+- [Configuration](#configuration)
+- [Deployment](#deployment)
+- [Testing](#testing)
+- [Project Structure](#project-structure)
+- [Tech Stack](#tech-stack)
+
+<img src="https://capsule-render.vercel.app/api?type=rect&color=0:232526,100:414345&height=3&width=100%"/>
 
 ## Performance Highlights
 
-| Metric | Value |
-|---|---|
-| Backtested Return (BTC-USD) | +40.38% |
-| Win Rate | 41.67% |
-| Sharpe Ratio | 0.64 |
-| Max Drawdown | -20.95% |
-| Historical Records Analyzed | 2,196+ |
+<div align="center">
 
----
+| Metric | Value |
+|:---|:---:|
+| Backtested Return (BTC-USD) | **+40.38%** |
+| Win Rate | **41.67%** |
+| Sharpe Ratio | **0.64** |
+| Max Drawdown | **-20.95%** |
+| Historical Records Analyzed | **2,196+** |
+
+</div>
+
+<img src="https://capsule-render.vercel.app/api?type=rect&color=0:232526,100:414345&height=3&width=100%"/>
 
 ## Features
 
+<table>
+<tr>
+<td valign="top" width="25%">
+
 **Trading Engine**
-- 7 technical indicators (RSI, MACD, Bollinger Bands, Moving Averages, Stochastic, ATR, OBV)
-- Automated signal generation via a majority-vote system
+- 7 technical indicators
+- Majority-vote signal generation
 - Risk management (3% stop loss, 20% take profit)
-- Paper trading mode for risk-free testing with real market data
-- Live trading ready via CCXT, supporting 100+ exchanges
-- Position sizing and portfolio management
+- Paper trading mode
+- Live trading via CCXT (100+ exchanges)
+- Position sizing & portfolio management
+
+</td>
+<td valign="top" width="25%">
 
 **Analytics & Optimization**
-- 2+ years of historical data across multiple cryptocurrencies
+- 2+ years of historical data, multiple assets
 - On-chain analytics (network data, sentiment)
-- Strategy backtesting with walk-forward and out-of-sample testing
-- Parameter optimization via grid search across 100+ combinations
+- Walk-forward & out-of-sample backtesting
+- Grid search parameter optimization
 - Multi-crypto support (BTC, ETH, SOL)
 
+</td>
+<td valign="top" width="25%">
+
 **Dashboard & Monitoring**
-- Real-time web dashboard (Flask REST API + vanilla JavaScript)
-- Interactive portfolio display with live P&L, holdings, and trades
-- Auto-updating charts, refreshed every 5 seconds
-- Bot controls for start/stop and configuration
-- Health monitoring with automated alerts
+- Real-time dashboard (Flask + vanilla JS)
+- Live P&L, holdings, and trade history
+- Auto-updating charts (5s refresh)
+- Bot start/stop controls
+- Automated health checks & alerts
+
+</td>
+<td valign="top" width="25%">
 
 **Deployment**
-- Cloud-ready with included Heroku configuration
-- Docker support for containerized deployment
-- Secure environment-based credential management
-- Designed for 24/7 operation
+- Heroku-ready configuration
+- Docker support
+- Secure environment-based credentials
+- Built for 24/7 operation
 
----
+</td>
+</tr>
+</table>
+
+<img src="https://capsule-render.vercel.app/api?type=rect&color=0:232526,100:414345&height=3&width=100%"/>
 
 ## Architecture
 
@@ -79,7 +123,7 @@ An automated cryptocurrency trading platform that uses technical analysis and ri
         Yahoo Finance, CoinGecko, CCXT (exchanges)
 ```
 
----
+<img src="https://capsule-render.vercel.app/api?type=rect&color=0:232526,100:414345&height=3&width=100%"/>
 
 ## Quick Start
 
@@ -128,25 +172,25 @@ Run a health check:
 python monitoring/health_check.py
 ```
 
----
+<img src="https://capsule-render.vercel.app/api?type=rect&color=0:232526,100:414345&height=3&width=100%"/>
 
 ## Technical Indicators
 
-**Moving Averages (SMA, EMA)** — Simple (20, 50, 200 periods) and Exponential (12, 26 periods). Used to identify trend direction and momentum.
+<div align="center">
 
-**RSI (Relative Strength Index)** — Range 0-100; overbought above 70, oversold below 30. Used to find market reversal points.
+| Indicator | Configuration | Purpose |
+|---|---|---|
+| Moving Averages (SMA, EMA) | SMA 20/50/200, EMA 12/26 | Trend direction and momentum |
+| RSI | Overbought > 70, oversold < 30 | Market reversal points |
+| MACD | 12 EMA − 26 EMA, 9 EMA signal | Trend following and momentum |
+| Bollinger Bands | 20-period SMA, ±2 std dev | Volatility and price extremes |
+| Stochastic Oscillator | %K / %D, range 0-100 | Overbought/oversold conditions |
+| ATR | Average True Range | Position sizing and stop-loss placement |
+| OBV | Cumulative volume | Confirms price trends with volume |
 
-**MACD (Moving Average Convergence Divergence)** — MACD line (12 EMA − 26 EMA), signal line (9 EMA of MACD). Used for trend following and momentum.
+</div>
 
-**Bollinger Bands** — 20-period SMA with ±2 standard deviation bands. Used to measure volatility and price extremes.
-
-**Stochastic Oscillator** — %K and %D lines, range 0-100. Used to detect overbought/oversold conditions.
-
-**ATR (Average True Range)** — Measures market volatility. Used for dynamic position sizing and stop-loss placement.
-
-**OBV (On-Balance Volume)** — Cumulative volume indicator, used to confirm price trends with volume analysis.
-
----
+<img src="https://capsule-render.vercel.app/api?type=rect&color=0:232526,100:414345&height=3&width=100%"/>
 
 ## Trading Strategy
 
@@ -174,37 +218,36 @@ else:
 - Signal threshold: requires 75% confidence
 - Daily loss limit: 10% maximum
 
----
+<img src="https://capsule-render.vercel.app/api?type=rect&color=0:232526,100:414345&height=3&width=100%"/>
 
 ## Backtesting Results
+
+<div align="center">
 
 **BTC-USD (optimized parameters)**
 
 | Metric | Value |
-|---|---|
-| Return | +40.38% |
+|:---|:---:|
+| Return | **+40.38%** |
 | Win Rate | 41.67% |
 | Sharpe Ratio | 0.64 |
 | Max Drawdown | -20.95% |
 | Trades | 24 |
 
-**ETH-USD** — Return: -6.40%, Win Rate: 41.94%, Max Drawdown: -27.40%
+| Asset | Return | Win Rate | Max Drawdown |
+|:---|:---:|:---:|:---:|
+| ETH-USD | -6.40% | 41.94% | -27.40% |
+| SOL-USD | -34.09% | 39.13% | -50.53% |
 
-**SOL-USD** — Return: -34.09%, Win Rate: 39.13%, Max Drawdown: -50.53%
+</div>
 
 The strategy performs best on Bitcoin, the most stable of the three assets tested.
 
----
+<img src="https://capsule-render.vercel.app/api?type=rect&color=0:232526,100:414345&height=3&width=100%"/>
 
 ## Database Schema
 
-**Tables**
-1. `price_history` — OHLCV data (open, high, low, close, volume)
-2. `portfolio` — current holdings per cryptocurrency
-3. `trades` — complete trade execution history
-4. `trading_signals` — generated buy/sell signals
-5. `blockchain_metrics` — on-chain analytics data
-6. `performance_metrics` — overall portfolio statistics
+**Tables:** `price_history`, `portfolio`, `trades`, `trading_signals`, `blockchain_metrics`, `performance_metrics`
 
 ```sql
 price_history
@@ -232,16 +275,20 @@ trades
 └── total_value
 ```
 
----
+<img src="https://capsule-render.vercel.app/api?type=rect&color=0:232526,100:414345&height=3&width=100%"/>
 
 ## API Endpoints
 
-**Portfolio**
-```http
-GET /api/portfolio
-```
-Returns current portfolio value, cash, P&L, and holdings.
+| Endpoint | Method | Description |
+|---|:---:|---|
+| `/api/portfolio` | GET | Portfolio value, cash, P&L, and holdings |
+| `/api/trades` | GET | Last 10 trades |
+| `/api/prices` | GET | Current prices for BTC, ETH, SOL |
+| `/api/bot/status` | GET | Current bot status |
+| `/api/bot/start` | POST | Start the bot |
+| `/api/bot/stop` | POST | Stop the bot |
 
+**Example response — `GET /api/portfolio`**
 ```json
 {
   "total_value": 10456.78,
@@ -258,26 +305,7 @@ Returns current portfolio value, cash, P&L, and holdings.
 }
 ```
 
-**Trades**
-```http
-GET /api/trades
-```
-Returns the last 10 trades.
-
-**Prices**
-```http
-GET /api/prices
-```
-Returns current prices for BTC, ETH, and SOL.
-
-**Bot Control**
-```http
-GET  /api/bot/status
-POST /api/bot/start
-POST /api/bot/stop
-```
-
----
+<img src="https://capsule-render.vercel.app/api?type=rect&color=0:232526,100:414345&height=3&width=100%"/>
 
 ## Configuration
 
@@ -318,11 +346,11 @@ CONFIG = {
 }
 ```
 
----
+<img src="https://capsule-render.vercel.app/api?type=rect&color=0:232526,100:414345&height=3&width=100%"/>
 
 ## Deployment
 
-### Heroku
+**Heroku**
 ```bash
 brew install heroku
 heroku login
@@ -334,7 +362,7 @@ heroku ps:scale web=1 worker=1
 heroku open
 ```
 
-### Docker
+**Docker**
 ```bash
 docker-compose build
 docker-compose up -d
@@ -342,7 +370,7 @@ docker-compose logs -f
 docker-compose down
 ```
 
----
+<img src="https://capsule-render.vercel.app/api?type=rect&color=0:232526,100:414345&height=3&width=100%"/>
 
 ## Testing
 
@@ -360,7 +388,7 @@ python trading/paper_trading.py
 python monitoring/health_check.py
 ```
 
----
+<img src="https://capsule-render.vercel.app/api?type=rect&color=0:232526,100:414345&height=3&width=100%"/>
 
 ## Project Structure
 
@@ -400,25 +428,18 @@ trading-bot/
 └── README.md
 ```
 
----
+<img src="https://capsule-render.vercel.app/api?type=rect&color=0:232526,100:414345&height=3&width=100%"/>
 
 ## Tech Stack
+
+<div align="center">
+
+<img src="https://skillicons.dev/icons?i=python,flask,sqlite,git,html,css,js&theme=dark" />
+
+</div>
+
+<br/>
 
 **Backend:** Python 3.10, Flask, SQLite, Pandas/NumPy, yfinance, TA-Lib, CCXT
 **Frontend:** HTML5, CSS3, Vanilla JavaScript, Fetch API
 **DevOps:** Git, Heroku, Docker, Gunicorn
-
----
-
-## License
-
-MIT License — see [LICENSE](../LICENSE)
-
----
-
-## Contact
-
-**Zenish Borad**
-LinkedIn: [zenish-borad](https://www.linkedin.com/in/zenish-borad)
-Email: [zenish42@gmail.com](mailto:zenish42@gmail.com)
-GitHub: [@Zenish2001](https://github.com/Zenish2001)
