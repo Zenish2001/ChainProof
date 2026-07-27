@@ -149,7 +149,6 @@ MIT License — see [LICENSE](LICENSE)
 
 <br/>
 
-*Open to fintech & blockchain engineering opportunities — feel free to reach out.*
 
 <img src="https://capsule-render.vercel.app/api?type=waving&color=0:414345,100:232526&height=100&section=footer" width="100%"/>
 
