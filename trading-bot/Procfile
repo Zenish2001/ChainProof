@@ -1,0 +1,2 @@
+web: gunicorn dashboard.trading_dashboard:app
+worker: python trading/paper_trading.py
