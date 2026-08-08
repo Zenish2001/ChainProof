@@ -106,3 +106,62 @@ cd dashboard && python dashboard_app.py
 <img src="https://capsule-render.vercel.app/api?type=rect&color=0:232526,100:414345&height=3&width=100%"/>
 
 ## Repository Structure
+
+```
+verification-layer/
+├── contracts/
+│   └── ChainProofRegistry.sol
+├── scripts/
+│   ├── deploy.js
+│   └── submit_commitments.js
+├── dashboard/
+│   ├── dashboard_app.py
+│   ├── templates/
+│   └── static/
+├── results/
+│   ├── strategy_comparison.csv
+│   ├── chainproof_replay_decisions.csv
+│   ├── chainproof_commitments.csv
+│   └── chainproof_onchain_log.csv
+├── screenshots/
+│   └── chainproof-dashboard.png
+├── generate_replay_data.py
+├── commit_and_sign.py
+├── verifier.py
+├── tamper_test.py
+└── hardhat.config.js
+```
+
+<img src="https://capsule-render.vercel.app/api?type=rect&color=0:232526,100:414345&height=3&width=100%"/>
+
+## Live Dashboard
+
+A Flask dashboard (`dashboard/`) presents all of the above interactively:
+
+- Real backtest stats and the Commit → Log → Verify → Attest pipeline
+- A live "Run Verification" button — triggers a genuine independent re-execution against the deployed contract, not a cached result
+- A live "Run Tamper Test" button — demonstrates falsification detection on demand
+- A price chart across all 30 committed decisions
+- The full on-chain commitment ledger, with direct links to each transaction on Etherscan
+
+Run it with `python dashboard/dashboard_app.py`, then open `http://localhost:5002`.
+
+<img src="https://capsule-render.vercel.app/api?type=rect&color=0:232526,100:414345&height=3&width=100%"/>
+
+## Tech Stack
+
+<div align="center">
+
+<img src="https://skillicons.dev/icons?i=solidity,python,flask,javascript,nodejs,git&theme=dark" />
+
+</div>
+
+**Contract & deployment:** Solidity, Hardhat, Ethereum Sepolia testnet
+**Verification scripts:** Python, `web3.py`, `eth-account`, `keccak256`
+**Dashboard:** Flask, vanilla JS, inline SVG charts
+
+<br/>
+
+<div align="center">
+<img src="https://capsule-render.vercel.app/api?type=waving&color=0:414345,100:232526&height=80&section=footer" width="100%"/>
+</div>

@@ -32,6 +32,24 @@ An automated cryptocurrency trading platform that uses technical analysis and ri
 
 <img src="https://capsule-render.vercel.app/api?type=rect&color=0:232526,100:414345&height=3&width=100%"/>
 
+## Screenshots
+
+<div align="center">
+
+**Live dashboard — real-time prices, current signal, session performance**
+
+<img src="screenshots/trading-bot-overview.png" width="90%"/>
+
+<br/><br/>
+
+**Holdings and trade history**
+
+<img src="screenshots/trading-bot-holdings.png" width="90%"/>
+
+</div>
+
+<img src="https://capsule-render.vercel.app/api?type=rect&color=0:232526,100:414345&height=3&width=100%"/>
+
 ## Performance Highlights
 
 <div align="center">
@@ -420,6 +438,9 @@ trading-bot/
 ├── monitoring/               # Health checks
 │   ├── __init__.py
 │   └── health_check.py
+├── screenshots/              # Dashboard screenshots
+│   ├── trading-bot-overview.png
+│   └── trading-bot-holdings.png
 ├── requirements.txt
 ├── Procfile
 ├── runtime.txt
