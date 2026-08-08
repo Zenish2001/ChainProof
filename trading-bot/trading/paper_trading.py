@@ -4,6 +4,7 @@ from datetime import datetime
 import sys
 import os
 import json
+import threading
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from data.database import TradingDatabase
 from indicators.technical_indicators import TechnicalIndicators
@@ -36,6 +37,17 @@ class PaperTradingBot:
         # Trading state
         self.is_running = False
         self.check_interval = 3600  # Check every hour (in seconds)
+
+        # Interruptible wait: lets stop() end the sleep immediately instead
+        # of blocking until the full check_interval elapses.
+        self._stop_event = threading.Event()
+
+        # Most recent signal per symbol, for the dashboard to display.
+        self.last_signals = {}
+
+        # Timestamp of the start of the most recent trading cycle, so the
+        # dashboard can compute a countdown to the next check.
+        self.last_cycle_time = None
         
         # Load portfolio if exists
         self.load_portfolio()
@@ -296,6 +308,7 @@ class PaperTradingBot:
     
     def run_trading_cycle(self):
         """Run one trading cycle - check signals and execute trades"""
+        self.last_cycle_time = datetime.now()
         print(f"\nRunning trading cycle at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
         
         for symbol in self.symbols:
@@ -316,6 +329,14 @@ class PaperTradingBot:
             
             # Generate trading signal
             signal, signal_strength, signal_details = self.generate_signal(symbol)
+
+            # Store for the dashboard to read.
+            self.last_signals[symbol] = {
+                'signal': signal,
+                'strength': float(signal_strength),
+                'price': float(current_price),
+                'timestamp': datetime.now().isoformat()
+            }
             
             print(f"Signal: {signal} (Strength: {signal_strength:.0f}%)")
             
@@ -334,6 +355,7 @@ class PaperTradingBot:
     def start(self):
         """Start the paper trading bot"""
         self.is_running = True
+        self._stop_event.clear()
         
         print("\n" + "="*70)
         print("PAPER TRADING BOT STARTED")
@@ -346,24 +368,27 @@ class PaperTradingBot:
                 self.run_trading_cycle()
                 
                 print(f"Waiting {self.check_interval//60} minutes until next check...")
-                time.sleep(self.check_interval)
+                # Interruptible wait: returns True immediately if stop() is
+                # called, instead of blocking for the full check_interval.
+                if self._stop_event.wait(self.check_interval):
+                    break
                 
         except KeyboardInterrupt:
             print("\n\nStopping paper trading bot...")
-            self.stop()
+        finally:
+            self.is_running = False
+            self.save_portfolio()
+            print("\n" + "="*70)
+            print("PAPER TRADING BOT STOPPED")
+            print("="*70)
+            self.print_portfolio_status()
+            print("Portfolio saved. You can resume later.")
+            print("="*70 + "\n")
     
     def stop(self):
-        """Stop the paper trading bot"""
+        """Stop the paper trading bot (interrupts the wait immediately)"""
         self.is_running = False
-        self.save_portfolio()
-        
-        print("\n" + "="*70)
-        print("PAPER TRADING BOT STOPPED")
-        print("="*70)
-        self.print_portfolio_status()
-        
-        print("Portfolio saved. You can resume later.")
-        print("="*70 + "\n")
+        self._stop_event.set()
 
 
 # Run paper trading bot

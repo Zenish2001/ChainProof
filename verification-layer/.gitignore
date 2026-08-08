@@ -1,0 +1,14 @@
+# Secrets — never commit
+.env
+attestation_key.json
+
+# Node
+node_modules/
+
+# Hardhat build artifacts (regenerable via `npx hardhat compile`)
+artifacts/
+cache/
+
+# Python
+__pycache__/
+*.pyc
