@@ -56,6 +56,18 @@ This module doesn't trade anything itself — it proves that decisions made by t
 
 <img src="https://capsule-render.vercel.app/api?type=rect&color=0:232526,100:414345&height=3&width=100%"/>
 
+## Screenshots
+
+<div align="center">
+
+**Live dashboard — commitment ledger, showing all 30 real on-chain decisions**
+
+<img src="screenshots/chainproof-dashboard.png" width="90%"/>
+
+</div>
+
+<img src="https://capsule-render.vercel.app/api?type=rect&color=0:232526,100:414345&height=3&width=100%"/>
+
 ## Scope — What's Real vs. Mocked
 
 **Real:**
