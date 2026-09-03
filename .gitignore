@@ -1,0 +1,6 @@
+
+# Foundry
+validator/out/
+validator/cache/
+validator/broadcast/*/dry-run/
+validator/lib/
