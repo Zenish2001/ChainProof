@@ -51,7 +51,7 @@ Any mismatch — a tampered trade, a quietly changed rule, a misreported result 
 
 | Metric | Value |
 |:---|:---:|
-| 💰 Backtested Return (BTC-USD) | **+40.38%** |
+| 💰 Backtested Return (BTC-USD) | **+38.47%** |
 | 📈 Sharpe Ratio | **0.64** |
 | 📉 Max Drawdown | **-20.95%** |
 | 🗃️ Historical Records Analyzed | **2,196+** |
