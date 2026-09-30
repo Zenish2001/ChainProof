@@ -9,8 +9,8 @@ jobs:
     name: Python tests and on-chain verification
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.11"
       - name: Install dependencies
@@ -27,7 +27,7 @@ jobs:
     name: Foundry fork tests
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: foundry-rs/foundry-toolchain@v1
       - name: Install forge-std
         run: git clone --depth 1 https://github.com/foundry-rs/forge-std validator/lib/forge-std
