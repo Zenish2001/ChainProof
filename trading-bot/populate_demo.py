@@ -1,3 +1,13 @@
+"""
+populate_demo.py -- fills the dashboard with SAMPLE data for UI development
+
+Everything this script writes is hand-written sample data, not output from
+the strategy or a real account: fixed trades, a fixed open position, and a
+fixed "current" price. Use it only to preview the dashboard layout. It
+clears the trades and portfolio tables first, so do not run it against a
+database holding real paper-trading history.
+"""
+
 import sqlite3
 from datetime import datetime, timedelta
 
@@ -27,12 +37,12 @@ for buy_days, buy_px, sell_days, sell_px, qty in roundtrips:
     c.execute("""INSERT INTO trades (symbol,timestamp,trade_type,quantity,price,total_value,fees,status,strategy,notes)
                  VALUES (?,?,?,?,?,?,?,?,?,?)""",
               ('BTC-USD', buy_ts, 'BUY', qty, buy_px, buy_val, buy_val*FEE_RATE,
-               'CLOSED', '4/7 Majority Vote', 'Signal: 5/7 indicators bullish'))
+               'CLOSED', 'SAMPLE DATA', 'Sample entry'))
     c.execute("""INSERT INTO trades (symbol,timestamp,trade_type,quantity,price,total_value,fees,status,strategy,notes)
                  VALUES (?,?,?,?,?,?,?,?,?,?)""",
               ('BTC-USD', sell_ts, 'SELL', qty, sell_px, sell_val, sell_val*FEE_RATE,
-               'CLOSED', '4/7 Majority Vote',
-               'Take-profit' if sell_px>buy_px else 'Stop-loss'))
+               'CLOSED', 'SAMPLE DATA',
+               'Sample take-profit' if sell_px>buy_px else 'Sample stop-loss'))
 
 # Current open holding — showing positive unrealized P&L
 open_qty, open_entry, current_px = 0.15, 60200, 64319
@@ -41,7 +51,7 @@ open_val = open_entry*open_qty
 c.execute("""INSERT INTO trades (symbol,timestamp,trade_type,quantity,price,total_value,fees,status,strategy,notes)
              VALUES (?,?,?,?,?,?,?,?,?,?)""",
           ('BTC-USD', open_ts, 'BUY', open_qty, open_entry, open_val, open_val*FEE_RATE,
-           'OPEN', '4/7 Majority Vote', 'Signal: 4/7 indicators bullish'))
+           'OPEN', 'SAMPLE DATA', 'Sample open position'))
 
 # Portfolio row for the open holding
 cur_val = current_px*open_qty

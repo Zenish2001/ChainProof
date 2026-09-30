@@ -3,14 +3,12 @@ const path = require("path");
 const hre = require("hardhat");
 const { ethers } = hre;
 
-// ============================================================
-// PASTE YOUR DEPLOYED CONTRACT ADDRESS HERE
-// (from the "ChainProofRegistry:" line in your deploy output)
-// ============================================================
+// The deployed ChainProofRegistry on Sepolia. Change this only if you
+// redeploy with scripts/deploy.js.
 const CONTRACT_ADDRESS = "0x57AfFe0184Bb5A9EfcaEe523b77D17880948A955";
 
-const COMMITMENTS_CSV = path.join(__dirname, "..", "..", "data", "chainproof_commitments.csv");
-const OUTPUT_CSV = path.join(__dirname, "..", "..", "data", "chainproof_onchain_log.csv");
+const COMMITMENTS_CSV = path.join(__dirname, "..", "results", "chainproof_commitments.csv");
+const OUTPUT_CSV = path.join(__dirname, "..", "results", "chainproof_onchain_log.csv");
 
 function parseCsv(filePath) {
   const raw = fs.readFileSync(filePath, "utf8").trim();

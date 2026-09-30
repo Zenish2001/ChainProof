@@ -56,7 +56,7 @@ An automated cryptocurrency trading platform that uses technical analysis and ri
 
 | Metric | Value |
 |:---|:---:|
-| Backtested Return (BTC-USD) | **+40.38%** |
+| Backtested Return (BTC-USD, best of grid search) | **+38.47%** |
 | Win Rate | **41.67%** |
 | Sharpe Ratio | **0.64** |
 | Max Drawdown | **-20.95%** |
@@ -73,8 +73,8 @@ An automated cryptocurrency trading platform that uses technical analysis and ri
 <td valign="top" width="25%">
 
 **Trading Engine**
-- 7 technical indicators
-- Majority-vote signal generation
+- 7 technical indicators computed, 4 voting
+- 2-of-4 signal generation
 - Risk management (3% stop loss, 20% take profit)
 - Paper trading mode
 - Live trading via CCXT (100+ exchanges)
@@ -86,7 +86,6 @@ An automated cryptocurrency trading platform that uses technical analysis and ri
 **Analytics & Optimization**
 - 2+ years of historical data, multiple assets
 - On-chain analytics (network data, sentiment)
-- Walk-forward & out-of-sample backtesting
 - Grid search parameter optimization
 - Multi-crypto support (BTC, ETH, SOL)
 
@@ -196,15 +195,15 @@ python monitoring/health_check.py
 
 <div align="center">
 
-| Indicator | Configuration | Purpose |
+| Indicator | Configuration | Role |
 |---|---|---|
-| Moving Averages (SMA, EMA) | SMA 20/50/200, EMA 12/26 | Trend direction and momentum |
-| RSI | Overbought > 70, oversold < 30 | Market reversal points |
-| MACD | 12 EMA − 26 EMA, 9 EMA signal | Trend following and momentum |
-| Bollinger Bands | 20-period SMA, ±2 std dev | Volatility and price extremes |
-| Stochastic Oscillator | %K / %D, range 0-100 | Overbought/oversold conditions |
-| ATR | Average True Range | Position sizing and stop-loss placement |
-| OBV | Cumulative volume | Confirms price trends with volume |
+| RSI | Buy < 30, sell > 70 | **Votes** |
+| MACD | 12 EMA − 26 EMA vs 9 EMA signal line | **Votes** |
+| Moving-average crossover | SMA 20 vs SMA 50 | **Votes** |
+| Bollinger Bands | 20-period SMA, ±2 std dev; buy below lower, sell above upper | **Votes** |
+| Stochastic Oscillator | %K / %D, range 0-100 | Computed and displayed, not voting |
+| ATR | Average True Range | Computed and displayed, not voting |
+| OBV | Cumulative volume | Computed and displayed, not voting |
 
 </div>
 
@@ -214,26 +213,30 @@ python monitoring/health_check.py
 
 ### Signal Generation
 
-A majority-vote system combines all 7 indicators:
+Four indicators vote BUY, SELL or HOLD. The overall signal comes from
+`TechnicalIndicators.generate_signals()`:
 
 ```python
-buy_votes = count_indicators_saying_buy()
-sell_votes = count_indicators_saying_sell()
+buy_count  = number of voting indicators saying BUY    # out of 4
+sell_count = number of voting indicators saying SELL   # out of 4
 
-if buy_votes >= 4:
-    signal = 'BUY'
-elif sell_votes >= 4:
-    signal = 'SELL'
-else:
-    signal = 'HOLD'
+if buy_count >= 2:  signal = 'BUY'
+if sell_count >= 2: signal = 'SELL'   # applied second, so a 2-2 tie resolves to SELL
+otherwise:          signal = 'HOLD'
+
+signal_strength = agreeing_votes / 4 * 100   # 50, 75 or 100
 ```
+
+The backtester (`execute_backtest`) enters on any BUY signal, i.e. 2 of 4 votes.
+Paper and live trading are stricter and require `signal_strength >= 75`
+(3 of 4 votes).
 
 ### Risk Management
 
 - Position size: 95% of available capital
 - Stop loss: 3% (automatic sell if loss exceeds threshold)
 - Take profit: 20% (automatic sell when target reached)
-- Signal threshold: requires 75% confidence
+- Signal threshold: paper/live trading requires 75% strength (3 of 4 votes); the backtester trades at 50% (2 of 4)
 - Daily loss limit: 10% maximum
 
 <img src="https://capsule-render.vercel.app/api?type=rect&color=0:232526,100:414345&height=3&width=100%"/>
@@ -246,7 +249,7 @@ else:
 
 | Metric | Value |
 |:---|:---:|
-| Return | **+40.38%** |
+| Return | **+38.47%** |
 | Win Rate | 41.67% |
 | Sharpe Ratio | 0.64 |
 | Max Drawdown | -20.95% |
@@ -260,6 +263,23 @@ else:
 </div>
 
 The strategy performs best on Bitcoin, the most stable of the three assets tested.
+
+**How to read these numbers.** Each row is the best configuration from a grid
+search over position size, stop-loss and take-profit, scored on the same
+historical data it was selected on, so the results are in-sample. The
+backtester also fills at the signal bar's close and does not model trading
+fees or slippage. Treat the figures as a description of this strategy on
+this history, not a forecast. The full sweep output is in
+[`results/strategy_comparison.csv`](../verification-layer/results/strategy_comparison.csv).
+
+`evaluate_backtest.py` reports what the headline leaves out: the
+buy-and-hold return over the same window, the result after a cost per
+side, and an out-of-sample run in which parameters chosen on the first 70%
+of the history trade the remaining 30% unchanged.
+
+```bash
+python evaluate_backtest.py --db data/trading_bot.db --cost 0.001
+```
 
 <img src="https://capsule-render.vercel.app/api?type=rect&color=0:232526,100:414345&height=3&width=100%"/>
 
@@ -412,7 +432,7 @@ python monitoring/health_check.py
 
 ```
 trading-bot/
-├── data/                    # Data collection & storage
+├── data/                    # Data collection & storage (not yet in this repository)
 │   ├── database.py
 │   ├── price_fetcher.py
 │   ├── fetch_historical_data.py
@@ -421,9 +441,8 @@ trading-bot/
 │   └── technical_indicators.py
 ├── strategies/              # Trading logic
 │   ├── trading_strategy.py
-│   ├── backtest.py
 │   └── strategy_optimizer.py
-├── blockchain/              # On-chain analytics
+├── blockchain/              # On-chain analytics (not yet in this repository)
 │   └── blockchain_analytics.py
 ├── trading/                 # Execution
 │   ├── paper_trading.py

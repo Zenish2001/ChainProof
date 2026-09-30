@@ -4,3 +4,8 @@ validator/out/
 validator/cache/
 validator/broadcast/*/dry-run/
 validator/lib/
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/

@@ -10,7 +10,7 @@
 
 </div>
 
-The ChainProof addition: a smart contract that logs trade-decision commitments on a public testnet, and an independent verifier that re-runs the [trading bot's](../trading-bot/) actual strategy code from scratch to confirm the on-chain record matches what the strategy genuinely produced.
+The ChainProof addition: a smart contract that logs trade-decision commitments on a public testnet, and an independent verifier that recomputes every commitment from the published decisions of the [trading bot](../trading-bot/) and checks it, and its signature, against the on-chain record.
 
 This module doesn't trade anything itself — it proves that decisions made by the trading bot are genuine.
 
@@ -31,13 +31,13 @@ This module doesn't trade anything itself — it proves that decisions made by t
 
 ## How It Works
 
-**1. Commit** — `generate_replay_data.py` re-runs the trading bot's unmodified strategy code against real historical BTC-USD price data, using the winning backtest parameters (`position_size=0.95, stop_loss=0.03, take_profit=0.20`). `commit_and_sign.py` then hashes each decision's full input snapshot — price, every indicator value, the decision itself, and the active risk parameters — with `keccak256`, and signs the hash with a dedicated local attestation key.
+**1. Commit** — `generate_replay_data.py` re-runs the trading bot's unmodified strategy code against real historical BTC-USD price data, using the winning backtest parameters (`position_size=0.95, stop_loss=0.03, take_profit=0.20`). `commit_and_sign.py` then hashes each decision's full input snapshot — price, each voting indicator's signal, the decision itself, and the active risk parameters — with `keccak256`, and signs the hash with a dedicated local attestation key.
 
 **2. Log** — `scripts/submit_commitments.js` submits each signed commitment to `ChainProofRegistry.sol`, a minimal Solidity contract deployed to the Ethereum Sepolia testnet. Every submission is a real, individually confirmed on-chain transaction.
 
-**3. Verify** — `verifier.py` independently re-runs the trading bot's strategy code **from scratch** — it does not read any cached file from steps 1–2. It recomputes each commitment hash and pulls the actual on-chain commitments directly from the live contract, then compares them.
+**3. Verify** — `verify.py` reads the 30 published decisions from `results/`, rebuilds each canonical payload, recomputes its `keccak256` hash, and compares it against the commitment pulled directly from the live contract. It also recovers the signer of every commitment and requires it to match the ChainProof attestation address, since the registry itself stores signatures without checking them. It does not re-run the strategy from raw prices — the price database is not yet in this repository.
 
-**4. Attest** — `tamper_test.py` demonstrates the verifier catching a deliberately falsified decision, by altering one commitment's price and confirming the recomputed hash no longer matches the on-chain record.
+**4. Tamper test** — `tamper_test.py` reuses `verify.py`'s functions to check one decision three ways: genuine (matches), price moved by $500 (rejected), and one indicator signal flipped (rejected).
 
 <img src="https://capsule-render.vercel.app/api?type=rect&color=0:232526,100:414345&height=3&width=100%"/>
 
@@ -49,7 +49,7 @@ This module doesn't trade anything itself — it proves that decisions made by t
 |:---|:---:|
 | Replayed decisions from real backtest | **30 / 30** genuine, matches known 38.47% return / 0.64 Sharpe |
 | Logged on-chain | **30 / 30** confirmed transactions on Sepolia |
-| Independently verified | **30 / 30** match |
+| Independently verified | **30 / 30** hashes match, **30 / 30** signatures valid |
 | Tamper-detection test | **Passed** — deliberately altered decision correctly flagged |
 | Contract source | **Verified** on Etherscan |
 
@@ -75,7 +75,7 @@ This module doesn't trade anything itself — it proves that decisions made by t
 - Unmodified strategy code — `technical_indicators.py` and `trading_strategy.py`, unchanged
 - Real BTC-USD price history and real backtest results
 - Real Sepolia transactions — every commitment is a genuine on-chain event
-- Real independent re-execution — the verifier re-runs the strategy from scratch, it does not trust cached files
+- Independent verification from a clean clone — no keys, no configuration, only the published data and the public chain
 
 **Mocked, stated explicitly:**
 - Attestation is a signed hash from a local key, standing in for full hardware TEE attestation
@@ -88,19 +88,28 @@ This module doesn't trade anything itself — it proves that decisions made by t
 
 ```bash
 npm install --legacy-peer-deps
-pip install web3 eth-account --break-system-packages
+pip install -r requirements.txt
 
 npx hardhat compile
 npx hardhat run scripts/deploy.js --network sepolia
 npx hardhat verify --network sepolia YOUR_CONTRACT_ADDRESS
 
+# Steps below re-create the commitments from scratch. generate_replay_data.py
+# needs the price database, which is not yet in this repository, and
+# commit_and_sign.py creates a NEW attestation key if none exists.
 python generate_replay_data.py
 python commit_and_sign.py
 npx hardhat run scripts/submit_commitments.js --network sepolia
-python verifier.py
+
+# Verification only needs this:
+python verify.py
 python tamper_test.py
 
-cd dashboard && python dashboard_app.py
+# Re-run the strategy from raw prices (after export_price_fixture.py has
+# written fixtures/BTC-USD.csv on the machine with the database):
+python replay_check.py
+
+python dashboard/dashboard_app.py
 ```
 
 <img src="https://capsule-render.vercel.app/api?type=rect&color=0:232526,100:414345&height=3&width=100%"/>
@@ -127,7 +136,9 @@ verification-layer/
 │   └── chainproof-dashboard.png
 ├── generate_replay_data.py
 ├── commit_and_sign.py
-├── verifier.py
+├── verify.py
+├── replay_check.py
+├── export_price_fixture.py
 ├── tamper_test.py
 └── hardhat.config.js
 ```
@@ -139,7 +150,7 @@ verification-layer/
 A Flask dashboard (`dashboard/`) presents all of the above interactively:
 
 - Real backtest stats and the Commit → Log → Verify → Attest pipeline
-- A live "Run Verification" button — triggers a genuine independent re-execution against the deployed contract, not a cached result
+- A live "Run Verification" button — runs the same checks as verify.py live against the deployed contract, not a cached result
 - A live "Run Tamper Test" button — demonstrates falsification detection on demand
 - A price chart across all 30 committed decisions
 - The full on-chain commitment ledger, with direct links to each transaction on Etherscan

@@ -17,13 +17,18 @@ commitment:
      proposal's explicitly-scoped attestation simplification, standing in
      for real TEE remote attestation.
 
-Output: data/chainproof_commitments.csv, with one row per decision,
+Output: results/chainproof_commitments.csv, with one row per decision,
 columns = original decision data + commitment_hash + signer_address +
 signature. This file is what the next script submits on-chain.
 
-Run from the project root:
-    pip install web3 eth-account --break-system-packages   # if not installed
-    python chainproof/commit_and_sign.py
+Run from anywhere (paths resolve relative to this file):
+    pip install -r requirements.txt
+    python commit_and_sign.py
+
+WARNING: the first run creates a new attestation key if attestation_key.json
+is missing. A new key produces a different signer address than the one the
+published commitments were signed with (see EXPECTED_ATTESTER in verify.py),
+so only re-run this if you intend to publish a fresh set of commitments.
 """
 
 import json
@@ -33,9 +38,10 @@ from web3 import Web3
 from eth_account import Account
 from eth_account.messages import encode_defunct
 
-INPUT_PATH = "data/chainproof_replay_decisions.csv"
-OUTPUT_PATH = "data/chainproof_commitments.csv"
-KEY_PATH = "chainproof/attestation_key.json"
+HERE = os.path.dirname(os.path.abspath(__file__))
+INPUT_PATH = os.path.join(HERE, "results", "chainproof_replay_decisions.csv")
+OUTPUT_PATH = os.path.join(HERE, "results", "chainproof_commitments.csv")
+KEY_PATH = os.path.join(HERE, "attestation_key.json")  # gitignored
 
 # The risk-rule parameters active for the backtest run being verified.
 # These come from strategy_comparison.csv's winning BTC-USD row and are
@@ -62,7 +68,6 @@ def get_or_create_attestation_key():
         return Account.from_key(data["private_key"])
 
     account = Account.create()
-    os.makedirs(os.path.dirname(KEY_PATH), exist_ok=True)
     with open(KEY_PATH, "w") as f:
         json.dump({
             "address": account.address,
@@ -75,7 +80,7 @@ def get_or_create_attestation_key():
 
 def canonical_payload(row):
     """Build a deterministic dict of everything this commitment covers:
-    the input snapshot (price + every indicator column) plus the decision
+    the input snapshot (price + every indicator signal column) plus the decision
     plus the risk parameters. Sorted keys + explicit str conversion keeps
     this reproducible across runs and across the later verifier script."""
     payload = {

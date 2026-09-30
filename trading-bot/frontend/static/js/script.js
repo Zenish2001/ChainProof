@@ -74,7 +74,7 @@ async function updatePortfolio() {
         const pnlPercentEl = document.getElementById('pnlPercent');
         const pnlClass = data.pnl >= 0 ? 'positive' : 'negative';
         
-        pnlEl.textContent = `${data.pnl >= 0 ? '+' : ''}$${Math.abs(data.pnl).toLocaleString()}`;
+        pnlEl.textContent = `${data.pnl >= 0 ? '+' : '-'}$${Math.abs(data.pnl).toLocaleString()}`;
         pnlEl.className = `hero-stat-value ${pnlClass}`;
         
         pnlPercentEl.textContent = `${data.pnl >= 0 ? '+' : ''}${data.pnl_percent.toFixed(2)}%`;

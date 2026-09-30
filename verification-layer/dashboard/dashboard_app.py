@@ -1,14 +1,15 @@
 """
 dashboard_app.py
 
-Flask backend for the ChainProof results dashboard. Deliberately reuses
-verifier.py and tamper_test.py's own functions directly -- clicking
-"Run Verification" or "Run Tamper Test" on the dashboard runs the real
-independent verification live, the same code paths you already ran
-successfully from the terminal.
+Flask backend for the ChainProof results dashboard. It reuses verify.py's
+own functions directly, so "Run Verification" and "Run Tamper Test" on the
+dashboard run exactly the same checks as `python verify.py` and
+`python tamper_test.py` in the terminal: recompute each commitment hash
+from results/chainproof_replay_decisions.csv, read the live contract on
+Sepolia, compare, and check each signature.
 
-Run from the chainproof/dashboard/ folder:
-    python dashboard_app.py
+Run from verification-layer/:
+    python dashboard/dashboard_app.py
 Then open http://localhost:5002
 """
 
@@ -16,40 +17,30 @@ import csv
 import os
 import sys
 
+import pandas as pd
 from flask import Flask, jsonify, render_template
 
-sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+HERE = os.path.dirname(os.path.abspath(__file__))
+LAYER_DIR = os.path.join(HERE, "..")
+sys.path.append(LAYER_DIR)
 
-# IMPORTANT: create the Flask app *before* changing the working directory.
-# Flask determines where its static/ and templates/ folders live at the
-# moment Flask(__name__) is called, based on the current working directory
-# at that instant. If os.chdir() ran first, Flask would resolve its static
-# folder relative to the wrong directory and every CSS/JS request would
-# silently 404 -- which is exactly what was happening.
 app = Flask(__name__)
 
-# Force the working directory to the project root, regardless of where this
-# script is launched from -- otherwise relative paths like
-# 'data/trading_bot.db' silently create a fresh empty database instead of
-# finding the real one. dashboard_app.py now lives in chainproof/dashboard/,
-# so the project root is two levels up.
-PROJECT_ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..")
-os.chdir(PROJECT_ROOT)
-
-from verifier import (
+from verify import (  # noqa: E402
     CONTRACT_ADDRESS,
+    DECISIONS_CSV,
+    EXPECTED_ATTESTER,
     canonical_payload,
+    check_decision,
     commitment_hash,
-    fetch_onchain_commitments,
-    regenerate_decisions_independently,
+    connect,
+    normalize,
 )
-from tamper_test import TAMPER_INDEX, TAMPER_PRICE_DELTA
 
-# chainproof/dashboard/dashboard_app.py -> data/ is two levels up, then into data/
-DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "data")
+RESULTS_DIR = os.path.join(LAYER_DIR, "results")
 
-# attestation_key.json lives in chainproof/, one level up from chainproof/dashboard/
-ATTESTATION_KEY_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "attestation_key.json")
+TAMPER_INDEX = 0
+TAMPER_PRICE_DELTA = 500
 
 
 @app.route("/")
@@ -62,7 +53,7 @@ def summary():
     """Headline stats: real backtest numbers (from strategy_comparison.csv,
     not re-run every request for speed) plus on-chain commitment counts."""
     stats = {}
-    comparison_path = os.path.join(DATA_DIR, "strategy_comparison.csv")
+    comparison_path = os.path.join(RESULTS_DIR, "strategy_comparison.csv")
     if os.path.exists(comparison_path):
         with open(comparison_path) as f:
             for row in csv.DictReader(f):
@@ -72,7 +63,7 @@ def summary():
                     stats["win_rate"] = round(float(row["win_rate"]), 2)
 
     total, succeeded = 0, 0
-    log_path = os.path.join(DATA_DIR, "chainproof_onchain_log.csv")
+    log_path = os.path.join(RESULTS_DIR, "chainproof_onchain_log.csv")
     if os.path.exists(log_path):
         with open(log_path) as f:
             for row in csv.DictReader(f):
@@ -84,11 +75,7 @@ def summary():
     stats["succeeded_commitments"] = succeeded
     stats["contract_address"] = CONTRACT_ADDRESS
 
-    key_path = ATTESTATION_KEY_PATH
-    if os.path.exists(key_path):
-        import json
-        with open(key_path) as f:
-            stats["signer_address"] = json.load(f).get("address")
+    stats["signer_address"] = EXPECTED_ATTESTER
 
     return jsonify(stats)
 
@@ -96,7 +83,7 @@ def summary():
 @app.route("/api/commitments")
 def commitments():
     """The on-chain log, straight from the CSV your submission script wrote."""
-    log_path = os.path.join(DATA_DIR, "chainproof_onchain_log.csv")
+    log_path = os.path.join(RESULTS_DIR, "chainproof_onchain_log.csv")
     rows = []
     if os.path.exists(log_path):
         with open(log_path) as f:
@@ -115,52 +102,47 @@ def commitments():
 
 @app.route("/api/run-verification", methods=["POST"])
 def run_verification():
-    """Live: re-runs the actual strategy code and compares against the
-    live contract, exactly like `python verifier.py` does from the
-    terminal -- just returned as JSON for the dashboard to render."""
-    decisions_df = regenerate_decisions_independently()
-    onchain = fetch_onchain_commitments()
+    """Live: the same checks as `python verify.py`, returned as JSON."""
+    decisions_df = pd.read_csv(DECISIONS_CSV)
+    contract = connect()
+    count = contract.functions.getCommitmentCount().call()
 
     results = []
     matches = 0
-    for i, entry in enumerate(onchain):
-        if i >= len(decisions_df):
-            continue
-        row = decisions_df.iloc[i]
-        recomputed = commitment_hash(canonical_payload(row))
-        ok = recomputed == entry["commitment_hash"]
+    for i in range(min(count, len(decisions_df))):
+        onchain = contract.functions.getCommitment(i).call()
+        hash_ok, signer_ok, recomputed = check_decision(decisions_df.iloc[i], onchain)
+        ok = hash_ok and signer_ok
         matches += ok
         results.append({
             "index": i,
-            "action": entry["action"],
-            "onchain_hash": entry["commitment_hash"],
+            "action": onchain[1],
+            "onchain_hash": normalize(onchain[0]),
             "recomputed_hash": recomputed,
             "match": ok,
+            "hash_match": hash_ok,
+            "signature_valid": signer_ok,
         })
 
-    return jsonify({"results": results, "matches": matches, "total": len(onchain)})
+    return jsonify({"results": results, "matches": matches, "total": count})
 
 
 @app.route("/api/run-tamper-test", methods=["POST"])
 def run_tamper_test():
-    """Live: the same two-part check as tamper_test.py -- a genuine match,
-    then the same decision with its price altered, showing the mismatch."""
-    decisions_df = regenerate_decisions_independently()
-    onchain = fetch_onchain_commitments()
+    """Live: a genuine match, then the same decision with its price altered."""
+    decisions_df = pd.read_csv(DECISIONS_CSV)
+    contract = connect()
+    onchain_hash = normalize(contract.functions.getCommitment(TAMPER_INDEX).call()[0])
 
     row = decisions_df.iloc[TAMPER_INDEX]
-    onchain_hash = onchain[TAMPER_INDEX]["commitment_hash"]
-
-    genuine_hash = commitment_hash(canonical_payload(row))
-    genuine_ok = genuine_hash == onchain_hash
+    genuine_hash = normalize(commitment_hash(canonical_payload(row)))
 
     tampered_row = row.copy()
-    tampered_row["price"] = tampered_row["price"] + TAMPER_PRICE_DELTA
-    tampered_hash = commitment_hash(canonical_payload(tampered_row))
-    tamper_detected = tampered_hash != onchain_hash
+    tampered_row["price"] = float(row["price"]) + TAMPER_PRICE_DELTA
+    tampered_hash = normalize(commitment_hash(canonical_payload(tampered_row)))
 
     return jsonify({
-        "index": int(TAMPER_INDEX),
+        "index": TAMPER_INDEX,
         "action": row["action"],
         "original_price": float(row["price"]),
         "tampered_price": float(tampered_row["price"]),
@@ -168,8 +150,8 @@ def run_tamper_test():
         "genuine_hash": genuine_hash,
         "tampered_hash": tampered_hash,
         "onchain_hash": onchain_hash,
-        "genuine_match": genuine_ok,
-        "tamper_detected": tamper_detected,
+        "genuine_match": genuine_hash == onchain_hash,
+        "tamper_detected": tampered_hash != onchain_hash,
     })
 
 

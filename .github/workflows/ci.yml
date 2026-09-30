@@ -1,0 +1,36 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  python:
+    name: Python tests and on-chain verification
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install dependencies
+        run: pip install pandas numpy web3 eth-account pytest
+      - name: Unit tests
+        run: pytest -q tests
+      - name: Verify the published commitments against Sepolia
+        run: python verification-layer/verify.py
+      - name: Replay the strategy from raw prices
+        if: hashFiles('verification-layer/fixtures/BTC-USD.csv') != ''
+        run: python verification-layer/replay_check.py
+
+  contracts:
+    name: Foundry fork tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: foundry-rs/foundry-toolchain@v1
+      - name: Install forge-std
+        run: git clone --depth 1 https://github.com/foundry-rs/forge-std validator/lib/forge-std
+      - name: Fork tests against live Sepolia
+        working-directory: validator
+        run: forge test --fork-url https://ethereum-sepolia-rpc.publicnode.com -vv

@@ -41,7 +41,7 @@ Block 11623216.
 
 ## What the deployment demonstrates
 
-**A Validation Registry now exists.** The canonical contracts repo lists Identity and Reputation addresses for 20+ networks and zero Validation Registry addresses; PR #11 removed the official deployments. Before this, `supportedTrust` claims had no on-chain venue to resolve against on any chain.
+**A Validation Registry for ChainProof now exists.** The canonical contracts repo lists Identity and Reputation addresses for 20+ networks and zero Validation Registry addresses; PR #11 removed the official deployments while the Validation Registry is reworked. Without an official registry, ChainProof's `supportedTrust` claim had no on-chain venue to resolve against, so this deployment provides one.
 
 **The authorization gap is real and the fix works.** ERC8004SPEC.md requires `validationRequest` to be called by the owner or operator of `agentId` but never specifies the Identity Registry interface that enforces it — no `ownerOf`, no `isAuthorizedOrOwner`, no `IIdentityRegistry` declaration anywhere in the document. The CC0 reference implementation resolved this with `agentExists()`, absent from the canonical registry's ABI, so it reverts in production. This deployment uses `isAuthorizedOrOwner(address,uint256)`, and tx `0x66f3b654…` is that call succeeding against the live registry.
 
