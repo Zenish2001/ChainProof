@@ -45,7 +45,7 @@
                     <div class="hero-content">
                         <div class="hero-label">&#9670; Backtested Return</div>
                         <div class="hero-value" id="statReturn">&mdash;</div>
-                        <div class="hero-change">&#10003; verified against 30/30 on-chain commitments</div>
+                        <div class="hero-change">in-sample backtest, best of 48 parameter sets</div>
                         <div class="hero-sub">the strategy behind every commitment below</div>
                     </div>
                 </div>
@@ -131,7 +131,7 @@
                             <li>Unmodified strategy code, unchanged</li>
                             <li>Real BTC-USD price history and real backtest results</li>
                             <li>Real Sepolia transactions &mdash; every commitment is genuine</li>
-                            <li>Real independent re-execution, not cached files</li>
+                            <li>Real verification against the live contract, not cached results</li>
                         </ul>
                     </div>
                     <div class="scope-col">
@@ -154,7 +154,7 @@
                         <button id="runVerificationBtn" class="btn-primary">Run Verification</button>
                     </div>
                 </div>
-                <p class="panel-note">Re-runs the actual strategy code from scratch and compares against the live contract on Sepolia. Not cached.</p>
+                <p class="panel-note">Recomputes every commitment hash from the published decisions, checks each signature, and compares against the live contract on Sepolia. Not cached.</p>
                 <div id="verificationStatus" class="status-banner hidden"></div>
                 <div id="verificationResults" class="results-grid"></div>
             </section>
