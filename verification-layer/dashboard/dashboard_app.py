@@ -1,12 +1,15 @@
 """
 dashboard_app.py
 
-Flask backend for the ChainProof results dashboard. It reuses verify.py's
-own functions directly, so "Run Verification" and "Run Tamper Test" on the
-dashboard run exactly the same checks as `python verify.py` and
-`python tamper_test.py` in the terminal: recompute each commitment hash
-from results/chainproof_replay_decisions.csv, read the live contract on
-Sepolia, compare, and check each signature.
+Flask backend for the ChainProof dashboard.
+
+The server's only job is to hand the browser the *published* data: the 30
+decisions from results/chainproof_replay_decisions.csv, each with the exact
+canonical JSON that verify.py hashes. The browser then does the checking on
+its own: it hashes that JSON with keccak256, reads the commitment from the
+ChainProofRegistry contract on Sepolia directly, and recovers the signer.
+So a visitor doesn't have to trust this server. If it served altered data,
+the hashes would stop matching what is on-chain.
 
 Run from verification-layer/:
     python dashboard/dashboard_app.py
@@ -14,6 +17,7 @@ Then open http://localhost:5002
 """
 
 import csv
+import json
 import os
 import sys
 
@@ -24,141 +28,123 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 LAYER_DIR = os.path.join(HERE, "..")
 sys.path.append(LAYER_DIR)
 
-app = Flask(__name__)
-
 from verify import (  # noqa: E402
     CONTRACT_ADDRESS,
     DECISIONS_CSV,
     EXPECTED_ATTESTER,
+    RISK_PARAMS,
     canonical_payload,
-    check_decision,
-    commitment_hash,
-    connect,
-    normalize,
 )
 
 RESULTS_DIR = os.path.join(LAYER_DIR, "results")
+REPO_URL = "https://github.com/Zenish2001/ChainProof"
 
-TAMPER_INDEX = 0
-TAMPER_PRICE_DELTA = 500
+# Read-only RPC endpoints the browser may use. BROWSER_RPC_URL, if set, is
+# tried first. Anything put here is visible to visitors, so only use a key
+# that is restricted to this site's domain.
+PUBLIC_RPCS = [
+    "https://ethereum-sepolia-rpc.publicnode.com",
+    "https://sepolia.drpc.org",
+    "https://1rpc.io/sepolia",
+]
+
+ERC8004 = {
+    "agent_id": 9896,
+    "identity_registry": "0x8004A818BFB912233c491871b3d84c89A494BD9e",
+    "validation_registry": "0xC640b92bAe5C832c8C8787F4F0fB894EF3De0d77",
+    "validator": "0xf3eF4e50A01d6ec110A231BF2C57E6aE8E625856",
+    "registration_tx": "0xb5c10780c1e8a9cfd31fffa537c763614995dd5346ad18fc3c4629394f6ea615",
+    "request_tx": "0x66f3b6544d768c25a0cd9baf98bfec13e3f8556bdce18368ccf1865d34c6e64d",
+    "verdict_tx": "0x4cc7b8e25495112ed845fa82dc7215394e38ebeb4f7a887188f438cf5739504f",
+    "agent_card": "https://raw.githubusercontent.com/Zenish2001/ChainProof/main/agent.json",
+}
+
+app = Flask(__name__)
 
 
-@app.route("/")
-def dashboard():
-    return render_template("chainproof_dashboard.html")
+def _clean(value):
+    """NaN can't be sent as JSON; send None instead (display only)."""
+    if isinstance(value, float) and value != value:
+        return None
+    if isinstance(value, dict):
+        return {k: _clean(v) for k, v in value.items()}
+    return value
 
 
-@app.route("/api/summary")
-def summary():
-    """Headline stats: real backtest numbers (from strategy_comparison.csv,
-    not re-run every request for speed) plus on-chain commitment counts."""
-    stats = {}
+def build_data():
+    df = pd.read_csv(DECISIONS_CSV)
+
+    onchain_log = {}
+    log_path = os.path.join(RESULTS_DIR, "chainproof_onchain_log.csv")
+    if os.path.exists(log_path):
+        with open(log_path) as f:
+            for row in csv.DictReader(f):
+                onchain_log[int(row["onchain_index"])] = row
+
+    decisions = []
+    for i in range(len(df)):
+        payload = canonical_payload(df.iloc[i])
+        canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+        log = onchain_log.get(i, {})
+        decisions.append({
+            "index": i,
+            "payload": _clean(payload),
+            # The exact string verify.py hashes. The browser hashes this
+            # string itself; nothing here is a precomputed hash.
+            "canonical": canonical,
+            "tx_hash": log.get("tx_hash"),
+            "block_number": int(log["block_number"]) if log.get("block_number") else None,
+        })
+
+    performance = []
     comparison_path = os.path.join(RESULTS_DIR, "strategy_comparison.csv")
     if os.path.exists(comparison_path):
         with open(comparison_path) as f:
             for row in csv.DictReader(f):
-                if row["symbol"] == "BTC-USD":
-                    stats["return_pct"] = round(float(row["best_return"]), 2)
-                    stats["sharpe"] = round(float(row["sharpe_ratio"]), 2)
-                    stats["win_rate"] = round(float(row["win_rate"]), 2)
-
-    total, succeeded = 0, 0
-    log_path = os.path.join(RESULTS_DIR, "chainproof_onchain_log.csv")
-    if os.path.exists(log_path):
-        with open(log_path) as f:
-            for row in csv.DictReader(f):
-                total += 1
-                if row.get("tx_hash") and row["tx_hash"] != "FAILED":
-                    succeeded += 1
-
-    stats["total_commitments"] = total
-    stats["succeeded_commitments"] = succeeded
-    stats["contract_address"] = CONTRACT_ADDRESS
-
-    stats["signer_address"] = EXPECTED_ATTESTER
-
-    return jsonify(stats)
-
-
-@app.route("/api/commitments")
-def commitments():
-    """The on-chain log, straight from the CSV your submission script wrote."""
-    log_path = os.path.join(RESULTS_DIR, "chainproof_onchain_log.csv")
-    rows = []
-    if os.path.exists(log_path):
-        with open(log_path) as f:
-            for i, row in enumerate(csv.DictReader(f)):
-                rows.append({
-                    "index": i,
-                    "timestamp": row.get("timestamp"),
-                    "action": row.get("action"),
-                    "price": row.get("price"),
-                    "commitment_hash": row.get("commitment_hash"),
-                    "tx_hash": row.get("tx_hash"),
-                    "block_number": row.get("block_number"),
+                performance.append({
+                    "symbol": row["symbol"],
+                    "return_pct": float(row["best_return"]),
+                    "win_rate_pct": float(row["win_rate"]),
+                    "sharpe": float(row["sharpe_ratio"]),
+                    "stop_loss": float(row["stop_loss"]),
+                    "take_profit": float(row["take_profit"]),
+                    "position_size": float(row["position_size"]),
                 })
-    return jsonify(rows)
+
+    rpcs = [os.environ.get("BROWSER_RPC_URL")] + PUBLIC_RPCS
+    return {
+        "chain_id": 11155111,
+        "contract": CONTRACT_ADDRESS,
+        "attester": EXPECTED_ATTESTER,
+        "risk_params": RISK_PARAMS,
+        "rpc_urls": [u for u in rpcs if u],
+        "decisions": decisions,
+        "performance": performance,
+        "erc8004": ERC8004,
+        "repo_url": REPO_URL,
+    }
 
 
-@app.route("/api/run-verification", methods=["POST"])
-def run_verification():
-    """Live: the same checks as `python verify.py`, returned as JSON."""
-    decisions_df = pd.read_csv(DECISIONS_CSV)
-    contract = connect()
-    count = contract.functions.getCommitmentCount().call()
-
-    results = []
-    matches = 0
-    for i in range(min(count, len(decisions_df))):
-        onchain = contract.functions.getCommitment(i).call()
-        hash_ok, signer_ok, recomputed = check_decision(decisions_df.iloc[i], onchain)
-        ok = hash_ok and signer_ok
-        matches += ok
-        results.append({
-            "index": i,
-            "action": onchain[1],
-            "onchain_hash": normalize(onchain[0]),
-            "recomputed_hash": recomputed,
-            "match": ok,
-            "hash_match": hash_ok,
-            "signature_valid": signer_ok,
-        })
-
-    return jsonify({"results": results, "matches": matches, "total": count})
+DATA = build_data()
 
 
-@app.route("/api/run-tamper-test", methods=["POST"])
-def run_tamper_test():
-    """Live: a genuine match, then the same decision with its price altered."""
-    decisions_df = pd.read_csv(DECISIONS_CSV)
-    contract = connect()
-    onchain_hash = normalize(contract.functions.getCommitment(TAMPER_INDEX).call()[0])
+@app.route("/")
+def dashboard():
+    return render_template("chainproof_dashboard.html", repo_url=REPO_URL, contract=CONTRACT_ADDRESS)
 
-    row = decisions_df.iloc[TAMPER_INDEX]
-    genuine_hash = normalize(commitment_hash(canonical_payload(row)))
 
-    tampered_row = row.copy()
-    tampered_row["price"] = float(row["price"]) + TAMPER_PRICE_DELTA
-    tampered_hash = normalize(commitment_hash(canonical_payload(tampered_row)))
+@app.route("/api/data")
+def data():
+    resp = jsonify(DATA)
+    resp.headers["Cache-Control"] = "public, max-age=300"
+    return resp
 
-    return jsonify({
-        "index": TAMPER_INDEX,
-        "action": row["action"],
-        "original_price": float(row["price"]),
-        "tampered_price": float(tampered_row["price"]),
-        "tamper_delta": TAMPER_PRICE_DELTA,
-        "genuine_hash": genuine_hash,
-        "tampered_hash": tampered_hash,
-        "onchain_hash": onchain_hash,
-        "genuine_match": genuine_hash == onchain_hash,
-        "tamper_detected": tampered_hash != onchain_hash,
-    })
+
+@app.route("/healthz")
+def healthz():
+    return "ok"
 
 
 if __name__ == "__main__":
-    print("=" * 60)
-    print("ChainProof Dashboard")
-    print("=" * 60)
-    print("Running at: http://localhost:5002")
-    print("=" * 60)
+    print("ChainProof dashboard at http://localhost:5002")
     app.run(debug=True, port=5002, use_reloader=False)

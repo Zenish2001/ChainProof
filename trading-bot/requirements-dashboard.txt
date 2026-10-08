@@ -1,0 +1,7 @@
+# What the paper-trading dashboard needs at runtime (the full
+# requirements.txt also covers backtesting and live-trading extras).
+flask
+pandas
+numpy
+requests
+gunicorn

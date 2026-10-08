@@ -1,13 +1,16 @@
 import time
-import yfinance as yf
-from datetime import datetime
+from datetime import datetime, timedelta
 import sys
 import os
 import json
 import threading
+import traceback
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from data.database import TradingDatabase
+from data.database import TradingDatabase, STATE_DIR
+from data.price_fetcher import get_spot_price, get_daily_candles
 from indicators.technical_indicators import TechnicalIndicators
+
+PORTFOLIO_FILE = os.path.join(STATE_DIR, "paper_portfolio.json")
 
 class PaperTradingBot:
     """
@@ -38,6 +41,11 @@ class PaperTradingBot:
         self.is_running = False
         self.check_interval = 3600  # Check every hour (in seconds)
 
+        # A signal needs this strength before the bot acts on it. Strength is
+        # the share of the 4 indicators that agree, so 75 means 3 of 4.
+        self.min_strength = 75
+        self.last_error = None
+
         # Interruptible wait: lets stop() end the sleep immediately instead
         # of blocking until the full check_interval elapses.
         self._stop_event = threading.Event()
@@ -65,20 +73,22 @@ class PaperTradingBot:
     
     def save_portfolio(self):
         """Save portfolio state to file"""
-        with open('data/paper_portfolio.json', 'w') as f:
+        with open(PORTFOLIO_FILE, 'w') as f:
             # Convert datetime to string for JSON
-            portfolio_copy = self.portfolio.copy()
-            if 'positions' in portfolio_copy:
-                for symbol in portfolio_copy['positions']:
-                    if 'entry_date' in portfolio_copy['positions'][symbol]:
-                        portfolio_copy['positions'][symbol]['entry_date'] = \
-                            portfolio_copy['positions'][symbol]['entry_date'].isoformat()
+            # Copy positions so the live portfolio keeps real datetimes.
+            portfolio_copy = dict(self.portfolio)
+            portfolio_copy['positions'] = {}
+            for symbol, pos in self.portfolio.get('positions', {}).items():
+                pos = dict(pos)
+                if isinstance(pos.get('entry_date'), datetime):
+                    pos['entry_date'] = pos['entry_date'].isoformat()
+                portfolio_copy['positions'][symbol] = pos
             json.dump(portfolio_copy, f, indent=2)
     
     def load_portfolio(self):
         """Load portfolio state from file"""
         try:
-            with open('data/paper_portfolio.json', 'r') as f:
+            with open(PORTFOLIO_FILE, 'r') as f:
                 saved = json.load(f)
                 self.portfolio = saved
                 # Convert string back to datetime
@@ -93,26 +103,18 @@ class PaperTradingBot:
     
     def fetch_current_price(self, symbol):
         """Fetch current price for a symbol"""
-        try:
-            ticker = yf.Ticker(symbol)
-            data = ticker.history(period='1d', interval='1m')
-            if not data.empty:
-                return data['Close'].iloc[-1]
-            return None
-        except Exception as e:
-            print(f"Error fetching price for {symbol}: {e}")
-            return None
+        return get_spot_price(symbol)
     
     def get_historical_data(self, symbol, days=30):
         """Get historical data for analysis"""
-        df = self.db.get_price_data(symbol)
-        if df.empty:
-            # Fetch from Yahoo if not in database
-            ticker = yf.Ticker(symbol)
-            df = ticker.history(period=f'{days}d', interval='1d')
-            if not df.empty:
-                self.db.insert_price_data(symbol, df)
-        return df
+        # Refresh daily candles when the newest stored one is more than a day
+        # old. (Previously data was only fetched once, so signals went stale.)
+        latest = self.db.latest_candle_time(symbol)
+        if latest is None or datetime.utcnow() - latest.to_pydatetime() > timedelta(hours=20):
+            fresh = get_daily_candles(symbol, days=max(days, 300))
+            if not fresh.empty:
+                self.db.insert_price_data(symbol, fresh)
+        return self.db.get_price_data(symbol)
     
     def generate_signal(self, symbol):
         """Generate trading signal for a symbol"""
@@ -120,12 +122,30 @@ class PaperTradingBot:
         
         if df.empty or len(df) < 50:
             return 'HOLD', 0, {}
-        
-        # Generate signals
-        signals, df_with_indicators = TechnicalIndicators.generate_signals(df)
-        latest_signal = signals.iloc[-1]
-        
-        return latest_signal['overall_signal'], latest_signal['signal_strength'], latest_signal
+
+        signals, ind = TechnicalIndicators.generate_signals(df)
+        last = signals.iloc[-1]
+        row = ind.iloc[-1]
+
+        def num(x):
+            return None if x != x else round(float(x), 2)  # NaN -> None
+
+        details = {
+            'candle_date': str(ind.index[-1])[:10],
+            'votes': {
+                'RSI (14)': {'vote': last['rsi_signal'], 'value': num(row['rsi']),
+                             'rule': 'Buy under 30, sell over 70'},
+                'MACD (12, 26, 9)': {'vote': last['macd_signal'], 'value': num(row['macd'] - row['macd_signal']),
+                                     'rule': 'Buy when MACD is above its signal line'},
+                'SMA 20 vs 50': {'vote': last['ma_signal'], 'value': num(row['sma_20'] - row['sma_50']),
+                                 'rule': 'Buy when the 20-day average is above the 50-day'},
+                # %B: where the close sits between the bands (0 = lower, 100 = upper)
+                'Bollinger %B (20, 2)': {'vote': last['bb_signal'],
+                                         'value': num((row['close'] - row['bb_lower']) / (row['bb_upper'] - row['bb_lower']) * 100),
+                                         'rule': 'Buy below the lower band (%B under 0), sell above the upper (over 100)'},
+            },
+        }
+        return last['overall_signal'], float(last['signal_strength']), details
     
     def execute_buy(self, symbol, price, signal_strength):
         """Execute a buy order (simulated)"""
@@ -262,12 +282,13 @@ class PaperTradingBot:
         
         return False
     
-    def update_portfolio_value(self):
+    def update_portfolio_value(self, prices=None):
         """Calculate current total portfolio value"""
         total = self.portfolio['cash']
+        prices = prices or {}
         
         for symbol, position in self.portfolio['positions'].items():
-            current_price = self.fetch_current_price(symbol)
+            current_price = prices.get(symbol) or self.fetch_current_price(symbol)
             if current_price:
                 position_value = position['quantity'] * current_price
                 total += position_value
@@ -310,48 +331,49 @@ class PaperTradingBot:
         """Run one trading cycle - check signals and execute trades"""
         self.last_cycle_time = datetime.now()
         print(f"\nRunning trading cycle at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-        
-        for symbol in self.symbols:
-            print(f"\nAnalyzing {symbol}...")
-            
-            # Get current price
-            current_price = self.fetch_current_price(symbol)
-            if not current_price:
-                print(f"Could not fetch price for {symbol}")
-                continue
-            
-            print(f"Current price: ${current_price:,.2f}")
-            
-            # Check stop loss / take profit for existing positions
-            if symbol in self.portfolio['positions']:
-                if self.check_stop_loss_take_profit(symbol, current_price):
-                    continue  # Position closed, move to next symbol
-            
-            # Generate trading signal
-            signal, signal_strength, signal_details = self.generate_signal(symbol)
+        prices = {}
 
-            # Store for the dashboard to read.
-            self.last_signals[symbol] = {
-                'signal': signal,
-                'strength': float(signal_strength),
-                'price': float(current_price),
-                'timestamp': datetime.now().isoformat()
-            }
-            
-            print(f"Signal: {signal} (Strength: {signal_strength:.0f}%)")
-            
-            # Execute trades based on signals
-            if signal == 'BUY' and signal_strength >= 75:
-                if symbol not in self.portfolio['positions']:
-                    self.execute_buy(symbol, current_price, signal_strength)
-            
-            elif signal == 'SELL' and signal_strength >= 75:
+        for symbol in self.symbols:
+            try:
+                current_price = self.fetch_current_price(symbol)
+                if not current_price:
+                    print(f"Could not fetch price for {symbol}")
+                    continue
+                prices[symbol] = current_price
+
+                exited = False
                 if symbol in self.portfolio['positions']:
-                    self.execute_sell(symbol, current_price, reason='SIGNAL', signal_strength=signal_strength)
-        
-        # Print portfolio status
-        self.print_portfolio_status()
-    
+                    exited = bool(self.check_stop_loss_take_profit(symbol, current_price))
+
+                signal, signal_strength, details = self.generate_signal(symbol)
+                self.last_signals[symbol] = {
+                    'signal': signal,
+                    'strength': float(signal_strength),
+                    'price': float(current_price),
+                    'timestamp': datetime.now().isoformat(),
+                    **(details or {}),
+                }
+                print(f"{symbol}: ${current_price:,.2f}, signal {signal} ({signal_strength:.0f}%)")
+
+                if exited:
+                    continue
+                if signal == 'BUY' and signal_strength >= self.min_strength:
+                    if symbol not in self.portfolio['positions']:
+                        self.execute_buy(symbol, current_price, signal_strength)
+                elif signal == 'SELL' and signal_strength >= self.min_strength:
+                    if symbol in self.portfolio['positions']:
+                        self.execute_sell(symbol, current_price, reason='SIGNAL', signal_strength=signal_strength)
+            except Exception as e:
+                # One bad symbol or network hiccup shouldn't stop the bot.
+                self.last_error = f"{symbol}: {e}"
+                traceback.print_exc()
+
+        # Snapshot the account so the dashboard can chart it over time.
+        self.update_portfolio_value(prices)
+        self.db.set_positions(self.portfolio['positions'], prices)
+        self.db.record_snapshot(self.portfolio['total_value'], self.portfolio['cash'], self.initial_capital)
+        self.save_portfolio()
+
     def start(self):
         """Start the paper trading bot"""
         self.is_running = True
@@ -365,7 +387,12 @@ class PaperTradingBot:
         
         try:
             while self.is_running:
-                self.run_trading_cycle()
+                try:
+                    self.run_trading_cycle()
+                    self.last_error = None
+                except Exception as e:
+                    self.last_error = str(e)
+                    traceback.print_exc()
                 
                 print(f"Waiting {self.check_interval//60} minutes until next check...")
                 # Interruptible wait: returns True immediately if stop() is

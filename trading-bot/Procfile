@@ -1,2 +1,1 @@
-web: gunicorn dashboard.trading_dashboard:app
-worker: python trading/paper_trading.py
+web: gunicorn -w 1 --threads 4 -b 0.0.0.0:$PORT --chdir frontend app:app
