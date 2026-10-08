@@ -12,46 +12,61 @@
 <body>
 <div class="page">
   <header class="site-header">
-    <a class="wordmark" href="/">ChainProof</a>
+    <a class="wordmark" href="/"><img src="{{ url_for('static', filename='favicon.svg') }}" alt="" width="22" height="22" />ChainProof</a>
     <nav aria-label="Links">
+      <a href="#decisions">Decisions</a>
+      <a href="#tamper">Tamper test</a>
+      <a href="#erc8004">ERC-8004</a>
       <a href="{{ repo_url }}" target="_blank" rel="noreferrer">GitHub</a>
-      <a href="https://sepolia.etherscan.io/address/{{ contract }}" target="_blank" rel="noreferrer">View on Etherscan</a>
+      <a class="nav-btn" href="https://sepolia.etherscan.io/address/{{ contract }}" target="_blank" rel="noreferrer">View on Etherscan</a>
     </nav>
   </header>
 
   <main>
-    <section class="intro">
-      <h1>ChainProof</h1>
-      <p class="subtitle">A trading bot that writes every decision to Ethereum, so anyone can check it later.</p>
-      <p>
-        I built a rule-based BTC trading bot and replayed it over 2024. It made 30 decisions. For
-        each one, the inputs and the decision were hashed (keccak256), signed with a dedicated key
-        (ECDSA), and stored in a contract on the Sepolia testnet. Once stored, they can't be edited.
-      </p>
-      <p>
-        The button below checks all 30 from your browser. It hashes the published data itself, reads
-        the stored records directly from Sepolia, and checks who signed them. This server only sends
-        the data, so you don't have to trust it.
-      </p>
-    </section>
-
-    <section class="block" id="verify">
-      <h2>Check it yourself</h2>
-      <div class="verify-row">
-        <button id="verify-btn" class="button button-primary" disabled>Verify all 30 decisions</button>
-        <a class="button" href="https://sepolia.etherscan.io/address/{{ contract }}" target="_blank" rel="noreferrer">Contract on Etherscan</a>
+    <section class="hero">
+      <div class="hero-left">
+        <h1>ChainProof</h1>
+        <p class="subtitle">A trading bot that writes every decision to Ethereum, so anyone can check it later.</p>
+        <p>
+          I built a rule-based BTC trading bot and replayed it over 2024. It made 30 decisions. For each
+          one, the inputs and the decision were hashed (keccak256), signed with a dedicated key (ECDSA)
+          and stored in a contract on the Sepolia testnet, where they can't be edited.
+        </p>
+        <p>
+          The button checks all 30 from your browser: it hashes the published data itself, reads the
+          stored records straight from Sepolia and checks who signed them. This server only sends the
+          data, so you don't have to trust it.
+        </p>
+        <div class="verify-row">
+          <button id="verify-btn" class="button button-primary" disabled>Verify all 30 decisions</button>
+          <a class="button" href="https://sepolia.etherscan.io/address/{{ contract }}" target="_blank" rel="noreferrer">Contract on Etherscan</a>
+        </div>
+        <div id="verify-progress" class="progress" hidden>
+          <div class="progress-track"><div id="progress-bar" class="progress-bar"></div></div>
+          <span id="progress-text" class="progress-text"></span>
+        </div>
+        <div id="verify-result" class="verify-result" aria-live="polite">
+          <p class="muted">Takes about 10 seconds. You don't need a wallet.</p>
+        </div>
       </div>
-      <div id="verify-progress" class="progress" hidden>
-        <div class="progress-track"><div id="progress-bar" class="progress-bar"></div></div>
-        <span id="progress-text" class="progress-text"></span>
-      </div>
-      <div id="verify-result" class="verify-result" aria-live="polite">
-        <p class="muted">Takes about 10 seconds. You don't need a wallet.</p>
-      </div>
-      <ol id="ledger" class="ledger-grid" aria-label="The 30 stored records"></ol>
-      <p class="muted small legend-line">
-        Each box is one record in the contract. Green means it matched, red means it didn't, grey means not checked yet.
-      </p>
+      <aside class="ledger-card" aria-label="The 30 stored records">
+        <div class="ledger-head">
+          <span>Records in ChainProofRegistry</span>
+          <span class="muted small">Sepolia</span>
+        </div>
+        <ol id="ledger" class="ledger-grid"></ol>
+        <p class="muted small legend-line">
+          <span class="key key-ok"></span>matched
+          <span class="key key-bad"></span>didn't match
+          <span class="key key-wait"></span>not checked yet
+        </p>
+        <dl class="mini-facts">
+          <div><dt>Contract</dt><dd><a href="https://sepolia.etherscan.io/address/{{ contract }}" target="_blank" rel="noreferrer"><code>{{ contract[:8] }}…{{ contract[-4:] }}</code></a></dd></div>
+          <div><dt>Signer</dt><dd><code>0xBd12…2c9f</code></dd></div>
+          <div><dt>ERC-8004 agent</dt><dd>#9896</dd></div>
+          <div><dt>Tests in CI</dt><dd>33</dd></div>
+        </dl>
+      </aside>
     </section>
 
     <section class="block">

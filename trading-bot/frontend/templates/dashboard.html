@@ -3,97 +3,182 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Paper Trading Bot | Zenish Borad</title>
-  <meta name="description" content="A BTC trading bot running live on Coinbase prices with $10,000 of pretend money." />
+  <title>Crypto Trading Bot | Zenish Borad</title>
+  <meta name="description" content="Live BTC, ETH and SOL prices, a paper-trading bot running on Coinbase data, and an interactive backtest." />
   <link rel="icon" href="{{ url_for('static', filename='favicon.svg') }}" type="image/svg+xml" />
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
 </head>
 <body>
-<div class="page">
-  <header class="top">
-    <div>
-      <h1>Paper Trading Bot</h1>
-      <p class="sub">
-        Trades BTC on live Coinbase prices with $10,000 of pretend money. Nothing here uses real funds.
-      </p>
+<header class="topbar">
+  <div class="wrap topbar-inner">
+    <div class="brand">
+      <img src="{{ url_for('static', filename='favicon.svg') }}" alt="" width="24" height="24" />
+      <span>Crypto Trading Bot</span>
     </div>
-    <nav>
+    <nav class="toplinks">
+      <a href="#market">Market</a>
+      <a href="#backtest">Backtest</a>
       <a href="{{ repo_url }}" target="_blank" rel="noreferrer">Code</a>
       <a href="{{ chainproof_url }}" target="_blank" rel="noreferrer">ChainProof</a>
+      <a class="btn btn-outline" href="{{ etherscan_url }}" target="_blank" rel="noreferrer">View on Etherscan</a>
     </nav>
-  </header>
-
-  <p id="status" class="status"><span class="status-dot"></span><span id="status-text">Connecting…</span></p>
-  {% if allow_control %}
-  <p class="controls">
-    <button id="btn-start" class="btn" type="button">Start</button>
-    <button id="btn-stop" class="btn" type="button">Stop</button>
-  </p>
-  {% endif %}
-
-  <table class="summary" aria-label="Account summary">
-    <tr>
-      <th>Account value</th><th>Return since start</th><th>Cash</th><th>Realized profit/loss</th>
-    </tr>
-    <tr>
-      <td id="acc-total" data-label="Account value">–</td><td id="acc-return" data-label="Return since start">–</td><td id="acc-cash" data-label="Cash">–</td><td id="acc-realized" data-label="Realized profit/loss">–</td>
-    </tr>
-  </table>
-
-  <div class="cols">
-    <section class="card">
-      <h2>Account value</h2>
-      <p class="note">Recorded after every check.</p>
-      <div id="equity-chart" class="chart"></div>
-    </section>
-    <section class="card">
-      <h2>Open position</h2>
-      <div id="position"></div>
-    </section>
   </div>
+</header>
 
-  <section class="card">
-    <h2>Latest BTC signal</h2>
-    <p id="signal-meta" class="note"></p>
-    <table class="grid-table">
-      <thead><tr><th>Indicator</th><th class="r">Reading</th><th>Vote</th><th>Rule</th></tr></thead>
-      <tbody id="votes"><tr><td colspan="4" class="note">Waiting for the first check…</td></tr></tbody>
-    </table>
-    <p id="signal-result" class="result"></p>
+<main class="wrap">
+  <section class="tickers" aria-label="Live prices">
+    <button class="ticker" data-symbol="BTC-USD" type="button">
+      <span class="t-name">Bitcoin <small>BTC</small></span>
+      <span class="t-price" id="px-BTC-USD">–</span>
+      <span class="t-change" id="ch-BTC-USD"></span>
+      <svg class="t-spark" id="sp-BTC-USD" viewBox="0 0 120 36" preserveAspectRatio="none" aria-hidden="true"></svg>
+      <span class="t-range" id="rg-BTC-USD"></span>
+    </button>
+    <button class="ticker" data-symbol="ETH-USD" type="button">
+      <span class="t-name">Ethereum <small>ETH</small></span>
+      <span class="t-price" id="px-ETH-USD">–</span>
+      <span class="t-change" id="ch-ETH-USD"></span>
+      <svg class="t-spark" id="sp-ETH-USD" viewBox="0 0 120 36" preserveAspectRatio="none" aria-hidden="true"></svg>
+      <span class="t-range" id="rg-ETH-USD"></span>
+    </button>
+    <button class="ticker" data-symbol="SOL-USD" type="button">
+      <span class="t-name">Solana <small>SOL</small></span>
+      <span class="t-price" id="px-SOL-USD">–</span>
+      <span class="t-change" id="ch-SOL-USD"></span>
+      <svg class="t-spark" id="sp-SOL-USD" viewBox="0 0 120 36" preserveAspectRatio="none" aria-hidden="true"></svg>
+      <span class="t-range" id="rg-SOL-USD"></span>
+    </button>
+  </section>
+  <p class="source"><span id="price-source">Loading live prices…</span> The small line is the last 30 days. Click a coin to chart it.</p>
+
+  <section class="grid-2">
+    <div class="panel">
+      <div class="panel-head">
+        <h2>Paper account</h2>
+        <span class="pill" id="bot-pill">…</span>
+      </div>
+      <p class="hint" id="acc-hint">Trades BTC, ETH and SOL with $10,000 of pretend money on live Coinbase prices. No real funds.</p>
+      <div class="stats">
+        <div><span>Account value</span><strong id="acc-total">–</strong></div>
+        <div><span>Return since start</span><strong id="acc-return">–</strong></div>
+        <div><span>Live return</span><strong id="acc-live">–</strong></div>
+        <div><span>Buy and hold (live)</span><strong id="acc-hold">–</strong></div>
+        <div><span>Cash</span><strong id="acc-cash">–</strong></div>
+        <div><span>Realized P&amp;L</span><strong id="acc-realized">–</strong></div>
+        <div><span>Closed trades</span><strong id="acc-closed">–</strong></div>
+        <div><span>Fees paid</span><strong id="acc-fees">–</strong></div>
+      </div>
+      <div class="bt-legend"><span><i></i>Live</span><span><i class="alt"></i>90-day replay</span></div>
+      <div id="equity-chart" class="chart"></div>
+    </div>
+    <div class="panel">
+      <div class="panel-head"><h2>Bot status</h2></div>
+      <p class="status-line" id="status-text">Connecting…</p>
+      {% if allow_control %}
+      <p class="controls">
+        <button id="btn-start" class="btn" type="button">Start</button>
+        <button id="btn-stop" class="btn" type="button">Stop</button>
+      </p>
+      {% endif %}
+      <h3>Open positions</h3>
+      <div id="position"></div>
+      <h3>Latest checks</h3>
+      <div class="table-wrap log-wrap">
+        <table class="table compact">
+          <thead><tr><th>Time (UTC)</th><th>Coin</th><th class="r">Price</th><th>Votes</th><th>Action</th></tr></thead>
+          <tbody id="decisions"><tr><td colspan="5" class="hint">Waiting for the first check…</td></tr></tbody>
+        </table>
+      </div>
+    </div>
   </section>
 
-  <section class="card">
-    <h2>BTC daily close</h2>
-    <p class="note">Last 120 days from Coinbase. Markers show the bot's buys (▲) and sells (▼).</p>
-    <div id="price-chart" class="chart"></div>
+  <section class="panel" id="market">
+    <div class="panel-head">
+      <h2 id="market-title">BTC-USD daily</h2>
+      <div class="tabs" role="tablist" aria-label="Market">
+        <button role="tab" data-symbol="BTC-USD" aria-selected="true" type="button">BTC</button>
+        <button role="tab" data-symbol="ETH-USD" aria-selected="false" type="button">ETH</button>
+        <button role="tab" data-symbol="SOL-USD" aria-selected="false" type="button">SOL</button>
+      </div>
+    </div>
+    <div class="legend">
+      <label><input type="checkbox" data-layer="sma20" checked /> <i class="sw sw-sma20"></i>SMA 20</label>
+      <label><input type="checkbox" data-layer="sma50" checked /> <i class="sw sw-sma50"></i>SMA 50</label>
+      <label><input type="checkbox" data-layer="bb" checked /> <i class="sw sw-bb"></i>Bollinger Bands</label>
+      <span class="hint" id="marker-note"></span>
+    </div>
+    <div id="candle-chart" class="chart"><p class="empty">Loading candles…</p></div>
+    <div class="grid-2 sub-charts">
+      <div>
+        <h3>RSI (14)</h3>
+        <div id="rsi-chart" class="chart"></div>
+      </div>
+      <div>
+        <h3>MACD (12, 26, 9)</h3>
+        <div id="macd-chart" class="chart"></div>
+      </div>
+    </div>
   </section>
 
-  <section class="card">
-    <h2>Trades</h2>
-    <div class="scroll">
-      <table class="grid-table">
-        <thead><tr><th>Time (UTC)</th><th>Side</th><th class="r">BTC</th><th class="r">Price</th><th class="r">Value</th><th>Note</th></tr></thead>
-        <tbody id="trades"><tr><td colspan="6" class="note">Loading…</td></tr></tbody>
+  <section class="panel">
+    <div class="panel-head"><h2 id="signals-title">Signals</h2></div>
+    <p class="hint">Each indicator votes buy, sell or hold every day. Two matching votes make a signal, and the paper bot acts on it.</p>
+    <div class="table-wrap">
+      <table class="table">
+        <thead><tr><th>Date</th><th class="r">Close</th><th>RSI</th><th>MACD</th><th>SMA 20/50</th><th>Bollinger</th><th>Signal</th></tr></thead>
+        <tbody id="signal-rows"><tr><td colspan="7" class="hint">Loading…</td></tr></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="panel" id="backtest">
+    <div class="panel-head"><h2>Backtest the strategy</h2></div>
+    <p class="hint">Runs the same 4-indicator strategy over the stored daily candles (roughly the last 300 days) with your settings, starting from $10,000.</p>
+    <form class="bt-form" id="bt-form">
+      <label>Market
+        <select name="symbol"><option>BTC-USD</option><option>ETH-USD</option><option>SOL-USD</option></select>
+      </label>
+      <label>Position size <output id="o-size">95%</output>
+        <input type="range" name="position_size" min="10" max="100" step="5" value="95" />
+      </label>
+      <label>Stop-loss <output id="o-sl">3%</output>
+        <input type="range" name="stop_loss" min="1" max="20" step="1" value="3" />
+      </label>
+      <label>Take-profit <output id="o-tp">20%</output>
+        <input type="range" name="take_profit" min="2" max="60" step="1" value="20" />
+      </label>
+      <button class="btn btn-primary" type="submit" id="bt-run">Run backtest</button>
+    </form>
+    <div id="bt-result" class="bt-result"></div>
+  </section>
+
+  <section class="panel">
+    <div class="panel-head"><h2>Paper trades</h2><span class="hint" style="margin:0">Replay = the 90-day warm start. Live = traded on real-time prices.</span></div>
+    <div class="table-wrap trades-wrap">
+      <table class="table">
+        <thead><tr><th>Time (UTC)</th><th>Coin</th><th>Side</th><th class="r">Amount</th><th class="r">Price</th><th class="r">Value</th><th class="r">P&amp;L</th><th>Source</th><th>Note</th></tr></thead>
+        <tbody id="trades"><tr><td colspan="9" class="hint">Loading…</td></tr></tbody>
       </table>
     </div>
   </section>
 
   <section class="about">
-    <h2>How it works</h2>
-    <p id="rules-text">
-      Every few minutes the bot pulls the BTC price and the last 300 daily candles from Coinbase.
-      Four indicators (RSI, MACD, a 20/50-day moving average crossover and Bollinger Bands) each vote
-      buy, sell or hold.
-    </p>
+    <h2>About</h2>
+    <p id="rules-text"></p>
     <p>
-      The numbers on this page come from this live run only. They are separate from the backtest
-      results, which are published, hashed and stored on-chain in
-      <a href="{{ chainproof_url }}" target="_blank" rel="noreferrer">ChainProof</a>.
+      The historical decisions of this strategy are hashed, signed and stored on Ethereum Sepolia by
+      <a href="{{ chainproof_url }}" target="_blank" rel="noreferrer">ChainProof</a>. The contract and every
+      record can be checked <a href="{{ etherscan_url }}" target="_blank" rel="noreferrer">on Etherscan</a>.
     </p>
   </section>
+</main>
 
-  <footer>Made by <a href="https://www.linkedin.com/in/zenish-borad" target="_blank" rel="noreferrer">Zenish Borad</a>. Python, pandas, Flask, Coinbase API.</footer>
-</div>
+<footer class="wrap footer">
+  Made by <a href="https://www.linkedin.com/in/zenish-borad" target="_blank" rel="noreferrer">Zenish Borad</a>.
+  Python, pandas, Flask and the Coinbase API.
+</footer>
+
+<div id="tip" class="tip" hidden></div>
 <script src="{{ url_for('static', filename='js/script.js') }}"></script>
 </body>
 </html>
